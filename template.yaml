@@ -46,7 +46,7 @@ Parameters:
     Description: The minimum capacity units for the Aurora cluster
     Type: String
     AllowedValues: [1, 2, 4, 8, 16, 32, 64, 128, 256]
-    Default: 1
+    Default: 2
   EngineVersion:
     Description: Aurora Serverless PostgreSQL version
     Type: String
@@ -217,13 +217,13 @@ Resources:
           ToPort: 5432
           SourceSecurityGroupId: !Ref AppSecurityGroup
       VpcId: !Ref VPC
-  KeyAlias:
-    Type: AWS::KMS::Alias
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      AliasName: !Sub 'alias/${AppName}'
-      TargetKeyId: !Ref Key
+  # KeyAlias:
+  #   Type: AWS::KMS::Alias
+  #   DeletionPolicy: Retain
+  #   UpdateReplacePolicy: Retain
+  #   Properties:
+  #     AliasName: !Sub 'alias/${AppName}'
+  #     TargetKeyId: !Ref Key
   Key:
     Type: AWS::KMS::Key
     DeletionPolicy: Retain
@@ -288,7 +288,7 @@ Resources:
       DBClusterIdentifier: !Ref AppName
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:username}}' ]]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:password}}' ]]
-      KmsKeyId: !Ref KeyAlias
+      KmsKeyId: !Ref Key
       DatabaseName: !Ref DatabaseName
       Engine: aurora-postgresql
       EngineMode: serverless
