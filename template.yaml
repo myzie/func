@@ -1,0 +1,346 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Func Infrastructure
+Parameters:
+  AppName:
+    Description: Application Name
+    Type: String
+    Default: func
+  EnvType:
+    Description: Environment type (dev, staging, prod)
+    Type: String
+    Default: dev
+  DatabaseName:
+    Description: Database name
+    Type: String
+  DatabaseMasterUsername:
+    AllowedPattern: "[a-zA-Z0-9_]+"
+    ConstraintDescription: Must be between 1 to 16 alphanumeric characters.
+    Description: The database admin account user name, between 1 to 16 alphanumeric characters.
+    MaxLength: '16'
+    MinLength: '1'
+    Type: String
+    Default: master
+  DatabaseBackupRetention:
+    Description: Number of days to keep database snapshots
+    Type: Number
+    MinValue: 1
+    MaxValue: 35
+    Default: 30
+  DatabaseAutoPause:
+    Description: Enable automatic pause for the Aurora cluster
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+  SecondsUntilAutoPause:
+    Description: The time, in seconds, before the Aurora cluster is paused
+    Type: Number
+    MinValue: 1
+    MaxValue: 86400
+    Default: 300
+  MaxCapacity:
+    Description: The maximum capacity units for the Aurora cluster
+    Type: String
+    AllowedValues: [1, 2, 4, 8, 16, 32, 64, 128, 256]
+    Default: 2
+  MinCapacity:
+    Description: The minimum capacity units for the Aurora cluster
+    Type: String
+    AllowedValues: [1, 2, 4, 8, 16, 32, 64, 128, 256]
+    Default: 1
+  EngineVersion:
+    Description: Aurora Serverless PostgreSQL version
+    Type: String
+    Default: '10.7'
+    AllowedValues: ['10.7']
+  EnableDataApi:
+    Description: 'Enable the Data API (https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/data-api.html).'
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+Mappings:
+  EngineVersionMap:
+    '10.7':
+      ClusterParameterGroupFamily: 'aurora-postgresql10'
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.1.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvType
+        - Key: AppName
+          Value: !Ref AppName
+  Gateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Environment
+        Value: !Ref EnvType
+      - Key: AppName
+        Value: !Ref AppName
+  GatewayAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref Gateway
+      VpcId: !Ref VPC
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: "10.1.1.0/24"
+      AvailabilityZone: !Select [0, !GetAZs '']
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Public1
+        - Key: Environment
+          Value: !Ref EnvType
+        - Key: AppName
+          Value: !Ref AppName
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: "10.1.2.0/24"
+      AvailabilityZone: !Select [1, !GetAZs '']
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Public2
+        - Key: Environment
+          Value: !Ref EnvType
+        - Key: AppName
+          Value: !Ref AppName
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: "10.1.3.0/24"
+      AvailabilityZone: !Select [2, !GetAZs '']
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Public3
+        - Key: Environment
+          Value: !Ref EnvType
+        - Key: AppName
+          Value: !Ref AppName
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: "10.1.11.0/24"
+      AvailabilityZone: !Select [0, !GetAZs '']
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Private1
+        - Key: Environment
+          Value: !Ref EnvType
+        - Key: AppName
+          Value: !Ref AppName
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: "10.1.12.0/24"
+      AvailabilityZone: !Select [1, !GetAZs '']
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Private2
+        - Key: Environment
+          Value: !Ref EnvType
+        - Key: AppName
+          Value: !Ref AppName
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: "10.1.13.0/24"
+      AvailabilityZone: !Select [2, !GetAZs '']
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Private3
+        - Key: Environment
+          Value: !Ref EnvType
+        - Key: AppName
+          Value: !Ref AppName
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Environment
+        Value: !Ref EnvType
+  PublicSubnet1RouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref RouteTable
+  PublicSubnet2RouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref RouteTable
+  PublicSubnet3RouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet3
+      RouteTableId: !Ref RouteTable
+  PublicRouteToInternet1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref Gateway
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      RouteTableIds:
+        - !Ref RouteTable
+      VpcId: !Ref VPC
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Ref 'AWS::StackName'
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Ref 'AWS::StackName'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+      VpcId: !Ref VPC
+  KeyAlias:
+    Type: AWS::KMS::Alias
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AliasName: !Sub 'alias/${AppName}'
+      TargetKeyId: !Ref Key
+  Key:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+          Action: 'kms:*'
+          Resource: '*'
+        - Effect: Allow
+          Principal:
+            AWS: '*'
+          Action:
+          - 'kms:Encrypt'
+          - 'kms:Decrypt'
+          - 'kms:ReEncrypt*'
+          - 'kms:GenerateDataKey*'
+          - 'kms:DescribeKey'
+          Resource: '*'
+          Condition:
+            StringEquals:
+              'kms:CallerAccount': !Ref 'AWS::AccountId'
+            StringLike:
+              'kms:ViaService': !Sub '*.${AWS::Region}.amazonaws.com'
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Ref 'AWS::StackName'
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3
+  DBClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: !Ref 'AWS::StackName'
+      Family: !FindInMap [EngineVersionMap, !Ref EngineVersion, ClusterParameterGroupFamily]
+      Parameters:
+        client_encoding: 'UTF8'
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${EnvType}-rds-secret"
+      Description: RDS password
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DatabaseMasterUsername}"}'
+        GenerateStringKey: "password"
+        PasswordLength: 30
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: AppName
+          Value: !Ref AppName
+  DBCluster:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBClusterIdentifier: !Ref AppName
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:username}}' ]]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:password}}' ]]
+      KmsKeyId: !Ref KeyAlias
+      DatabaseName: !Ref DatabaseName
+      Engine: aurora-postgresql
+      EngineMode: serverless
+      EngineVersion: !Ref EngineVersion
+      BackupRetentionPeriod: !Ref DatabaseBackupRetention
+      EnableHttpEndpoint: !Ref EnableDataApi
+      ScalingConfiguration:
+        AutoPause: !Ref DatabaseAutoPause
+        MaxCapacity: !Ref MaxCapacity
+        MinCapacity: !Ref MinCapacity
+        SecondsUntilAutoPause: !Ref SecondsUntilAutoPause
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      StorageEncrypted: true
+      VpcSecurityGroupIds:
+        - !Ref SecurityGroup
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Ref AppName
+Outputs:
+  StackName:
+    Description: Aurora Stack Name
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub ${AWS::StackName}-StackName
+  DatabaseName:
+    Description: Aurora Database Name
+    Value: !Ref DatabaseName
+    Export:
+      Name: !Sub ${AWS::StackName}-DatabaseName
+  DatabaseClusterArn:
+    Description: Aurora Cluster ARN
+    Value: !Sub arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AppName}
+    Export:
+      Name: !Sub ${AWS::StackName}-DatabaseClusterArn
+  DatabaseSecretArn:
+    Description: Aurora Secret ARN
+    Value: !Ref DBSecret
+    Export:
+      Name: !Sub ${AWS::StackName}-DatabaseSecretArn
+  DatabaseClusterID:
+    Description: Aurora Cluster ID
+    Value: !Ref DBCluster
+    Export:
+      Name: !Sub ${AWS::StackName}-DatabaseClusterID
+  DatabaseURL:
+    Description: Database URL
+    Value: !GetAtt DBCluster.Endpoint.Address
+    Export:
+      Name: !Sub ${AWS::StackName}-DatabaseURL
+  DatabaseMasterUsername:
+    Description: Database Master Username
+    Value: !Ref DatabaseMasterUsername
+    Export:
+      Name: !Sub ${AWS::StackName}-DatabaseMasterUsername
